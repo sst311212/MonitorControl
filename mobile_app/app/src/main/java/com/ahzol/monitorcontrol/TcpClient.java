@@ -2,10 +2,8 @@ package com.ahzol.monitorcontrol;
 
 import android.util.Log;
 
-import java.io.BufferedOutputStream;
-import java.io.BufferedWriter;
 import java.io.DataOutputStream;
-import java.io.OutputStreamWriter;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 
 public class TcpClient {
@@ -21,10 +19,7 @@ public class TcpClient {
         new Thread(() -> {
             try {
                 Socket ss = new Socket(host_name, host_port);
-                OutputStreamWriter osw = new OutputStreamWriter(ss.getOutputStream());
-                osw.write(message, 0, message.length());
-                osw.flush();
-                osw.close();
+                ss.getOutputStream().write(message.getBytes("utf-8"));
                 ss.close();
             } catch (Exception ex) {
                 Log.d("[MRC]", ex.getMessage());

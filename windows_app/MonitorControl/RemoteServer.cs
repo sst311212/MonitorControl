@@ -13,62 +13,52 @@ namespace MonitorControl
     {
         private TcpListener server { get; set; }
 
+        private byte[] recvBuff { get; set; }
+
         public RemoteServer(int port)
         {
-#if DEBUG
-            server = new TcpListener(System.Net.IPAddress.Loopback, port);
-#else
-            server = TcpListener.Create(port);
-#endif
+            server = new TcpListener(IPAddress.Any, port);
+            recvBuff = new byte[65536];
         }
 
         public void Start()
         {
             server.Start();
-            server.BeginAcceptTcpClient(new AsyncCallback(TcpClientCallback), server);
+            server.BeginAcceptTcpClient(ClientConnectCallback, server);
         }
 
-        private static void TcpClientCallback(IAsyncResult ar)
+        private void ClientConnectCallback(IAsyncResult ar)
         {
-            TcpListener server = ar.AsyncState as TcpListener;
+            TcpListener server = (TcpListener)ar.AsyncState;
             TcpClient client = server.EndAcceptTcpClient(ar);
-            server.BeginAcceptTcpClient(new AsyncCallback(TcpClientCallback), server);
             if (client.Connected && IsLocalAddress(client.Client.RemoteEndPoint as IPEndPoint))
-                ProcessClient(client);
+            {
+                NetworkStream ns = client.GetStream();
+                ns.BeginRead(recvBuff, 0, 4096, ReadStreamCallback, ns);
+            }
+            server.BeginAcceptTcpClient(ClientConnectCallback, server);
         }
 
-        private static void ProcessClient(TcpClient client)
+        private void ReadStreamCallback(IAsyncResult ar)
         {
-            Stream ss = client.GetStream();
-            try
-            {
-                byte[] recvBuff = new byte[client.Available];
-                ss.Read(recvBuff, 0, recvBuff.Length);
-                string recvData = Encoding.UTF8.GetString(recvBuff);
+            NetworkStream ns = (NetworkStream)ar.AsyncState;
+            string recvText = Encoding.UTF8.GetString(recvBuff, 0, ns.EndRead(ar));
 
-                if (recvData.Contains("[MRC]:"))
-                {
-                    string message = recvData.Split(':').LastOrDefault();
-                    HotkeyEvent.Hotkey_EventTrigger(null, new CustomEventArgs(message));
-                }
-                else
-                {
-                    string sendData = "<h1>MonitorRemoteControl</h1>";
-                    StringBuilder sb = new StringBuilder();
-                    sb.AppendLine($"HTTP/1.1 200 OK\r\nContent-Length: {sendData.Length}\r\n");
-                    sb.AppendLine(sendData);
-                    byte[] sendBuff = Encoding.UTF8.GetBytes(sb.ToString());
-                    ss.Write(sendBuff, 0, sendBuff.Length);
-                }
-            }
-            catch { }
-            finally
+            if (recvText.Contains("[MRC]:"))
             {
-                ss.Close();
-                client.Close();
+                string msg = recvText.Split(':').LastOrDefault();
+                HotkeyEvent.Hotkey_EventTrigger(null, new CustomEventArgs(msg));
+            }
+            else
+            {
+                string sendText = "<h1>MonitorRemoteControl</h1>";
+                StringBuilder sb = new StringBuilder();
+                sb.AppendLine($"HTTP/1.0 200 OK\r\nContent-Length: {sendText.Length}\r\n");
+                sb.AppendLine(sendText);
+                byte[] sendBuff = Encoding.UTF8.GetBytes(sb.ToString());
+                ns.Write(sendBuff, 0, sendBuff.Length);
             }
         }
-
         private static bool IsLocalAddress(IPEndPoint remoteIP)
         {
             byte[] ipData = remoteIP.Address.GetAddressBytes();
