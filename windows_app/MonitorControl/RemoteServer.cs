@@ -31,40 +31,42 @@ namespace MonitorControl
         private static void TcpClientCallback(IAsyncResult ar)
         {
             TcpListener server = ar.AsyncState as TcpListener;
-            using (TcpClient client = server.EndAcceptTcpClient(ar))
-            {
-                if (client.Connected && IsLocalAddress(client.Client.RemoteEndPoint as IPEndPoint))
-                    ProcessClient(client);
-            }
+            TcpClient client = server.EndAcceptTcpClient(ar);
             server.BeginAcceptTcpClient(new AsyncCallback(TcpClientCallback), server);
+            if (client.Connected && IsLocalAddress(client.Client.RemoteEndPoint as IPEndPoint))
+                ProcessClient(client);
         }
 
         private static void ProcessClient(TcpClient client)
         {
+            Stream ss = client.GetStream();
             try
             {
-                using (Stream ss = client.GetStream())
-                {
-                    byte[] recvBuff = new byte[client.ReceiveBufferSize];
-                    ss.Read(recvBuff, 0, recvBuff.Length);
-                    string recvData = Encoding.UTF8.GetString(recvBuff);
+                byte[] recvBuff = new byte[client.Available];
+                ss.Read(recvBuff, 0, recvBuff.Length);
+                string recvData = Encoding.UTF8.GetString(recvBuff);
 
-                    if (recvData.Contains("[MRC]:"))
-                    {
-                        string message = recvData.Split(':').LastOrDefault();
-                        HotkeyEvent.Hotkey_EventTrigger(null, new CustomEventArgs(message));
-                    }
-                    else
-                    {
-                        string sendData = "<h1>MonitorRemoteControl</h1>";
-                        StringBuilder sb = new StringBuilder();
-                        sb.AppendLine($"HTTP/1.1 200 OK\r\nContent-Length: {sendData.Length}\r\n");
-                        sb.AppendLine(sendData);
-                        byte[] sendBuff = Encoding.UTF8.GetBytes(sb.ToString());
-                        ss.Write(sendBuff, 0, sendBuff.Length);
-                    }
+                if (recvData.Contains("[MRC]:"))
+                {
+                    string message = recvData.Split(':').LastOrDefault();
+                    HotkeyEvent.Hotkey_EventTrigger(null, new CustomEventArgs(message));
                 }
-            } catch { }
+                else
+                {
+                    string sendData = "<h1>MonitorRemoteControl</h1>";
+                    StringBuilder sb = new StringBuilder();
+                    sb.AppendLine($"HTTP/1.1 200 OK\r\nContent-Length: {sendData.Length}\r\n");
+                    sb.AppendLine(sendData);
+                    byte[] sendBuff = Encoding.UTF8.GetBytes(sb.ToString());
+                    ss.Write(sendBuff, 0, sendBuff.Length);
+                }
+            }
+            catch { }
+            finally
+            {
+                ss.Close();
+                client.Close();
+            }
         }
 
         private static bool IsLocalAddress(IPEndPoint remoteIP)
