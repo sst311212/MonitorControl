@@ -29,7 +29,7 @@ namespace MonitorControl
             PHYSICAL_MONITOR[] phMonitors = new PHYSICAL_MONITOR[dwMonitors];
             NativeAPI.GetPhysicalMonitorsFromHMONITOR(hMonitor, dwMonitors, phMonitors);
             NativeAPI.GetVCPFeatureAndVCPFeatureReply(phMonitors[0].hPhysicalMonitor, (byte)VCPCode.PowerMode, out _, out int dwPwrMode, out _);
-            PowerMode dwSwitchMode = (dwPwrMode < (int)PowerMode.Off) ? PowerMode.BtnOff : PowerMode.On;
+            PowerMode dwSwitchMode = (dwPwrMode != (int)PowerMode.Off) ? PowerMode.BtnOff : PowerMode.On;
             NativeAPI.SetVCPFeature(phMonitors[0].hPhysicalMonitor, (byte)VCPCode.PowerMode, (int)dwSwitchMode);
             NativeAPI.DestroyPhysicalMonitors(dwMonitors, phMonitors);
         }
